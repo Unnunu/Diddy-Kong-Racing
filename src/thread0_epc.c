@@ -25,9 +25,9 @@ OSMesgQueue gEPCMesgQueue;
 OSMesg gEPCMesgBuf[8];
 OSMesg gEPCPIBuf[8];
 OSMesgQueue gEPCPIQueue;
-epcInfo gEpcInfo;
-u64 gEpcInfoStack1[STACKSIZE(STACK_EPCINFO1)];
-u64 gEpcInfoStack2[STACKSIZE(STACK_EPCINFO2)];
+OSThread gFaultThreadInfo;
+u32 gEpcInfoStack1[PAGE_DATA_SIZE / sizeof(u32)];
+u16 gEpcInfoStack2[PAGE_DATA_SIZE];
 s32 gObjectStackTrace[3];
 
 /**
@@ -116,39 +116,38 @@ void stop_all_threads_except_main(void) {
  */
 void write_epc_data_to_cpak(void) {
     OSThread *thread;
-    UNUSED s16 sp444[0x200];
-    u8 sp244[0x200];
-    u8 sp44[0x200];
+    u8 sp44[4 * PAGE_DATA_SIZE];
     s16 *v0;
     s32 i;
     s32 currentCount;
     s32 maxCount;
     u8 zero;
+    u16* ptr;
 
+    // Get fault thread
     for (thread = __osGetActiveQueue(); thread->priority != -1; thread = thread->tlnext) {
         if (thread->priority > OS_PRIORITY_IDLE && thread->priority <= OS_PRIORITY_APPMAX) {
-            if (thread->flags & 2 || thread->flags & 1) {
+            if (thread->flags & OS_FLAG_FAULT || thread->flags & OS_FLAG_CPU_BREAK) {
                 break;
             }
         }
     }
 
     if (thread->priority != -1) {
-        thread->context.fp0.f.f_odd = gObjectStackTrace[0];
-        thread->context.fp0.f.f_even = gObjectStackTrace[1];
-        thread->context.fp2.f.f_odd = gObjectStackTrace[2];
-        bcopy(thread, sp44, sizeof(epcInfo));
-        bcopy((void *) (u32) thread->context.sp, sp244, sizeof(sp244));
-        zero = 0; // Why is this needed to match?
-        v0 = func_80024594(&currentCount, &maxCount);
-        for (i = zero; i < maxCount; i++) {
-            sp444[i] = v0[currentCount];
+        thread->context.fp0.f.f_odd = gObjectStackTrace[OBJECT_SPAWN];
+        thread->context.fp0.f.f_even = gObjectStackTrace[OBJECT_UPDATE];
+        thread->context.fp2.f.f_odd = gObjectStackTrace[OBJECT_DRAW];
+        bcopy(thread, sp44, sizeof(OSThread));
+        bcopy((void *) (u32) thread->context.sp, sp44 + PAGE_DATA_SIZE, PAGE_DATA_SIZE);
+        v0 = obj_get_event_log(&currentCount, &maxCount);
+        for (ptr = (u16*)(sp44 + 2 * PAGE_DATA_SIZE), i = 0; i < maxCount; i++) {
+            ptr[i] = v0[currentCount];
             currentCount--;
-            if (currentCount < zero) {
+            if (currentCount < 0) {
                 currentCount += maxCount;
             }
         }
-        write_controller_pak_file(0, -1, "CORE", "", sp44, sizeof(sp44) + sizeof(sp244) + sizeof(sp444));
+        write_controller_pak_file(0, -1, "CORE", "", sp44, sizeof(sp44));
     }
     while (1) {} // Infinite loop
 }
@@ -158,37 +157,35 @@ void write_epc_data_to_cpak(void) {
  * but only if CHEAT_EPC_LOCK_UP_DISPLAY is active.
  */
 void dump_memory_to_cpak(s32 epc, s32 size, u32 colourTag) {
-    epcInfo epcinfo;
-    s16 sp440[0x200];
-    u8 sp240[0x200];
-    u8 sp40[0x200];
+    OSThread thread;
+    u8 sp40[4 * PAGE_DATA_SIZE];
     s16 *v0;
     s32 currentCount;
+    u16* ptr;
     s32 i;
-    UNUSED s32 pad;
 
     // This is checking if the EPC cheat is active
     if (get_filtered_cheats() & CHEAT_EPC_LOCK_UP_DISPLAY) {
-        bzero(&epcinfo, sizeof(epcInfo));
-        epcinfo.epc = epc & 0xFFFFFFFFFFFFFFFF; // fakematch
-        epcinfo.a0 = size;
-        epcinfo.a1 = colourTag;
-        epcinfo.cause = -1;
-        epcinfo.objectStackTrace[0] = gObjectStackTrace[0];
-        epcinfo.objectStackTrace[1] = gObjectStackTrace[1];
-        epcinfo.objectStackTrace[2] = gObjectStackTrace[2];
-        bcopy(&epcinfo, &sp40, sizeof(epcInfo));
-        bzero(&sp240, sizeof(sp240));
-        v0 = func_80024594(&currentCount, &size);
-        for (i = 0; i < size; i++) {
-            sp440[i] = v0[currentCount];
+        bzero(&thread, sizeof(OSThread));
+        thread.context.pc = epc & 0xFFFFFFFFFFFFFFFF; // fakematch
+        thread.context.a0 = size;
+        thread.context.a1 = colourTag;
+        thread.context.cause = 0xFFFFFFFF;
+        thread.context.fp0.f.f_odd = gObjectStackTrace[OBJECT_SPAWN];
+        thread.context.fp0.f.f_even = gObjectStackTrace[OBJECT_UPDATE];
+        thread.context.fp2.f.f_odd = gObjectStackTrace[OBJECT_DRAW];
+        bcopy(&thread, &sp40, sizeof(OSThread));
+
+        bzero(sp40 + PAGE_DATA_SIZE, PAGE_DATA_SIZE);
+        v0 = obj_get_event_log(&currentCount, &size);
+        for (ptr = (u16*)(sp40 + 2 * PAGE_DATA_SIZE), i = 0; i < size; i++) {
+            ptr[i] = v0[currentCount];
             currentCount--;
             if (currentCount < 0) {
                 currentCount += size;
             }
         }
-        i = sizeof(sp40) + sizeof(sp240) + sizeof(sp440); // fakematch?
-        write_controller_pak_file(0, -1, "CORE", "", sp40, sizeof(sp40) + sizeof(sp240) + sizeof(sp440));
+        write_controller_pak_file(0, -1, "CORE", "", sp40, sizeof(sp40));
         while (1) {} // Infinite loop; waiting for the player to reset the console?
     }
 }
@@ -203,33 +200,26 @@ void update_object_stack_trace(s32 index, s32 value) {
     }
 }
 
-#ifndef _ALIGN128
-#define _ALIGN128(a) (((u32) (a) + 0x7F) & ~(u32) 0x7F)
-#endif
-
 /**
  * Called as a check to see if render_epc_lock_up_display should be called.
  */
 s32 get_lockup_status(void) {
     s32 fileNum;
     s32 controllerIndex = 0;
-    u64 sp420[STACKSIZE(STACK_EPCINFO2)]; // Overwrite epcStack?
-    u64 sp220[STACKSIZE(STACK_EPCINFO1)];
-    u8 dataFromControllerPak[_ALIGN128(sizeof(epcInfo))];
+    u8 dataFromControllerPak[4 * PAGE_DATA_SIZE];
 
     if (sLockupStatus != -1) {
         return sLockupStatus;
     } else {
         sLockupStatus = 0;
-        // Looks like it reads EpcInfo data from the controller pak, which is interesting
         if ((get_si_device_status(controllerIndex) == CONTROLLER_PAK_GOOD) &&
             (get_file_number(controllerIndex, "CORE", "", &fileNum) == CONTROLLER_PAK_GOOD) &&
             (read_data_from_controller_pak(controllerIndex, fileNum, dataFromControllerPak,
-                                           sizeof(sp420) + sizeof(sp220) + sizeof(dataFromControllerPak)) ==
+                                           sizeof(dataFromControllerPak)) ==
              CONTROLLER_PAK_GOOD)) {
-            bcopy(&dataFromControllerPak, &gEpcInfo, sizeof(epcInfo));
-            bcopy(&sp220, &gEpcInfoStack1, sizeof(sp220));
-            bcopy(&sp420, &gEpcInfoStack2, sizeof(sp420));
+            bcopy(dataFromControllerPak, &gFaultThreadInfo, sizeof(OSThread));
+            bcopy(dataFromControllerPak + PAGE_DATA_SIZE, gEpcInfoStack1, PAGE_DATA_SIZE);
+            bcopy(dataFromControllerPak + 2 * PAGE_DATA_SIZE, &gEpcInfoStack2, 2 * PAGE_DATA_SIZE);
             sLockupStatus = 1;
         }
         start_reading_controller_data(controllerIndex);
@@ -253,7 +243,7 @@ void mode_lockup(s32 updateRate) {
     }
 }
 
-#define GET_REG(reg) (s32) epcinfo->reg
+#define GET_REG(reg) (s32) epcinfo->context.reg
 
 /**
  * Draw onscreen the four pages of the crash screen.
@@ -262,7 +252,7 @@ void mode_lockup(s32 updateRate) {
  * Page 4 appears to show the data of the EPC stack itself?
  */
 void render_epc_lock_up_display(void) {
-    epcInfo *epcinfo;
+    OSThread *epcinfo;
     char *objStatusString[3] = { "setup", "control", "print" };
     s32 offset;
     s32 s3;
@@ -272,12 +262,12 @@ void render_epc_lock_up_display(void) {
     set_render_printf_position(16, 32);
     switch (sLockupPage) {
         case EPC_PAGE_REGISTER:
-            epcinfo = &gEpcInfo;
-            gObjectStackTrace[OBJECT_SPAWN] = epcinfo->objectStackTrace[OBJECT_SPAWN];
-            gObjectStackTrace[OBJECT_UPDATE] = epcinfo->objectStackTrace[OBJECT_UPDATE];
-            gObjectStackTrace[OBJECT_DRAW] = epcinfo->objectStackTrace[OBJECT_DRAW];
-            if (epcinfo->cause == 0xFFFFFFFF) {
-                render_printf(" epc\t\t0x%08x\n", epcinfo->epc);
+            epcinfo = &gFaultThreadInfo;
+            gObjectStackTrace[OBJECT_SPAWN] = epcinfo->context.fp0.f.f_odd;
+            gObjectStackTrace[OBJECT_UPDATE] = epcinfo->context.fp0.f.f_even;
+            gObjectStackTrace[OBJECT_DRAW] = epcinfo->context.fp2.f.f_odd;
+            if (epcinfo->context.cause == 0xFFFFFFFF) {
+                render_printf(" epc\t\t0x%08x\n", epcinfo->context.pc);
                 render_printf(" cause\t\tmmAlloc(%d,0x%8x)\n", GET_REG(a0), GET_REG(a1));
                 for (i = 0; i < ARRAY_COUNT(gObjectStackTrace); i++) {
                     if (gObjectStackTrace[i] != OBJECT_CLEAR) {
@@ -291,11 +281,12 @@ void render_epc_lock_up_display(void) {
                 render_printf("\n");
                 render_printf("\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
             } else {
-                render_printf(" Fault in thread %d\n", epcinfo->thread[GET_REG(t9) * 0]); // fake GET_REG
-                render_printf(" epc\t\t0x%08x\n", epcinfo->epc);
-                render_printf(" cause\t\t0x%08x\n", epcinfo->cause);
-                render_printf(" sr\t\t0x%08x\n", epcinfo->sr);
-                render_printf(" badvaddr\t0x%08x\n", epcinfo->badvaddr);
+                epcinfo = &gFaultThreadInfo; // need to assign it once again
+                render_printf(" Fault in thread %d\n", epcinfo->id);
+                render_printf(" epc\t\t0x%08x\n", epcinfo->context.pc);
+                render_printf(" cause\t\t0x%08x\n", epcinfo->context.cause);
+                render_printf(" sr\t\t0x%08x\n", epcinfo->context.sr);
+                render_printf(" badvaddr\t0x%08x\n", epcinfo->context.badvaddr);
                 for (i = 0; i < ARRAY_COUNT(gObjectStackTrace); i++) {
                     if (gObjectStackTrace[i] != OBJECT_CLEAR) {
                         if (!s3) {
@@ -321,19 +312,19 @@ void render_epc_lock_up_display(void) {
         case EPC_PAGE_STACK_TOP:    /* fall through */
         case EPC_PAGE_STACK_MIDDLE: /* fall through */
         case EPC_PAGE_STACK_BOTTOM:
-            offset = (sLockupPage - 1) * 48;
+            offset = (sLockupPage - EPC_PAGE_STACK_TOP) * 48;
             for (i = 0; i < 16; i++) {
-                render_printf("   %08x %08x %08x\n", ((u16 **) &gEpcInfoStack1)[offset],
-                              ((u16 **) &gEpcInfoStack1)[offset + 16], ((u16 **) &gEpcInfoStack1)[offset + 32]);
+                render_printf("   %08x %08x %08x\n", gEpcInfoStack1[offset],
+                              gEpcInfoStack1[offset + 16], gEpcInfoStack1[offset + 32]);
                 offset++;
             }
             break;
-        case EPC_PAGE_UNK04:
-            offset = (sLockupPage - 4) * 128;
+        case EPC_PAGE_LOG:
+            offset = (sLockupPage - EPC_PAGE_LOG) * 128;
             for (i = 0; i < 16; i++) {
                 render_printf("  ");
                 for (j = 0; j < 8; j++) {
-                    render_printf("%04x ", (((u16 *) &gEpcInfoStack2)[offset]));
+                    render_printf("%04x ", gEpcInfoStack2[offset]);
                     offset++;
                 }
                 render_printf("\n");

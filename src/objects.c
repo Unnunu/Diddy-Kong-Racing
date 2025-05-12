@@ -41,7 +41,7 @@
 FadeTransition gTajChallengeTransition = FADE_TRANSITION(FADE_FULLSCREEN, FADE_FLAG_OUT, FADE_COLOR_BLACK, 30, 15);
 FadeTransition gBalloonCutsceneTransition = FADE_TRANSITION(FADE_CIRCLE, FADE_FLAG_NONE, FADE_COLOR_BLACK, 30, 15);
 
-s32 D_800DC700 = 0;
+s32 gLastLogRecord = 0;
 s32 D_800DC704 = 0; // Currently unknown, might be a different type.
 s16 D_800DC708 = 0;
 s32 D_800DC70C = 0; // Currently unknown, might be a different type.
@@ -191,7 +191,7 @@ UNUSED const char sPureAnguishString[] = "ARGHHHHHHHHH\n";
 
 /************ .bss ************/
 
-s16 D_8011AC20[128];
+s16 gObjEventLog[128];
 s8 D_8011AD20;
 s8 D_8011AD21;
 s8 D_8011AD22[2];
@@ -1650,7 +1650,7 @@ UNUSED s32 particle_count(void) {
 
 void add_particle_to_entity_list(Object *obj) {
     obj->segment.trans.flags |= OBJ_FLAGS_PARTICLE;
-    func_800245B4(obj->segment.object.unk2C | (OBJ_FLAGS_PARTICLE | OBJ_FLAGS_INVISIBLE));
+    obj_log_event(obj->segment.object.unk2C | EVENT_PARTICLE_CREATED);
     gObjPtrList[gObjectCount++] = obj;
     if (1) {} // Fakematch
     gParticleCount++;
@@ -1699,7 +1699,7 @@ Object *spawn_object(LevelObjectEntryCommon *entry, s32 arg1) {
         curObj->segment.trans.flags |= OBJ_FLAGS_UNK_0080;
     }
     if (curObj->segment.header->behaviorId == BHV_ROCKET_SIGNPOST && settings->cutsceneFlags & 1) {
-        update_object_stack_trace(OBJECT_SPAWN, -1);
+        update_object_stack_trace(OBJECT_SPAWN, OBJECT_CLEAR);
         return NULL;
     }
     curObj->segment.trans.x_position = entry->x;
@@ -1710,7 +1710,7 @@ Object *spawn_object(LevelObjectEntryCommon *entry, s32 arg1) {
     curObj->segment.object.unk2C = var_a0;
     curObj->segment.level_entry = (LevelObjectEntry *) entry;
     curObj->objectID = objType;
-    func_800245B4(objType);
+    obj_log_event(objType | EVENT_OBJECT_CREATED);
     curObj->segment.trans.scale = curObj->segment.header->scale;
     curObj->segment.camera.unk34 = curObj->segment.header->unk50 * curObj->segment.trans.scale;
     curObj->segment.object.opacity = 0xFF;
@@ -1959,7 +1959,7 @@ Object *spawn_object(LevelObjectEntryCommon *entry, s32 arg1) {
         light_setup_light_sources(newObj);
     }
     func_800619F4(0);
-    update_object_stack_trace(OBJECT_SPAWN, -1);
+    update_object_stack_trace(OBJECT_SPAWN, OBJECT_CLEAR);
     return newObj;
 }
 #else
@@ -2227,7 +2227,7 @@ Object *func_8000FD54(s32 objectHeaderIndex) {
  * Official Name: objFreeObject
  */
 void free_object(Object *object) {
-    func_800245B4(object->objectID | OBJ_FLAGS_PARTICLE);
+    obj_log_event(object->objectID | EVENT_OBJECT_DESTROYED);
     gParticlePtrList[gFreeListCount] = object;
     gFreeListCount++;
 }
@@ -2290,7 +2290,7 @@ void obj_update(s32 updateRate) {
     s32 sp54;
     Object *obj;
 
-    func_800245B4(-1);
+    obj_log_event(EVENT_OBJECT_UPDATED);
     gEventStartTimer = gEventCountdown;
     if ((gEventCountdown > 0) && (race_starting() != 0)) {
         gEventCountdown -= updateRate;
@@ -7515,15 +7515,15 @@ void run_object_loop_func(Object *obj, s32 updateRate) {
 UNUSED void func_8002458C(UNUSED s32 arg0) {
 }
 
-s16 *func_80024594(s32 *currentCount, s32 *maxCount) {
-    *currentCount = D_800DC700;
-    *maxCount = ARRAY_COUNT(D_8011AC20);
-    return D_8011AC20;
+s16 *obj_get_event_log(s32 *lastRecord, s32 *logSize) {
+    *lastRecord = gLastLogRecord;
+    *logSize = ARRAY_COUNT(gObjEventLog);
+    return gObjEventLog;
 }
 
-void func_800245B4(s16 arg0) {
-    D_8011AC20[D_800DC700++] = arg0;
-    if (D_800DC700 >= ARRAY_COUNT(D_8011AC20)) {
-        D_800DC700 = 0;
+void obj_log_event(s16 arg0) {
+    gObjEventLog[gLastLogRecord++] = arg0;
+    if (gLastLogRecord >= ARRAY_COUNT(gObjEventLog)) {
+        gLastLogRecord = 0;
     }
 }

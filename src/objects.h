@@ -21,6 +21,14 @@
 
 #define BOOST_DEFAULT -1
 
+#define EVENT_OBJECT_CREATED 0x0000
+#define EVENT_AUDIO_POINT_DESTROYED 0x5000
+#define EVENT_OBJECT_DESTROYED 0x8000
+#define EVENT_NO_MEMORY_FOR_AUDIO_POINT 0xAA55
+#define EVENT_PARTICLE_CREATED 0xC000
+#define EVENT_AUDIO_POINT_CREATED 0xE000
+#define EVENT_OBJECT_UPDATED 0xFFFF
+
 enum ObjectBehaviours {
     BHV_NONE,
     BHV_RACER,
@@ -446,8 +454,8 @@ s8 obj_door_override(void);
 void obj_door_open(s32 setting);
 void run_object_init_func(Object *obj, void *entry, s32 param);
 void run_object_loop_func(Object *obj, s32 updateRate);
-s16 *func_80024594(s32 *currentCount, s32 *maxCount);
-void func_800245B4(s16 arg0);
+s16 *obj_get_event_log(s32 *currentCount, s32 *maxCount);
+void obj_log_event(s16 arg0);
 void object_do_player_tumble(Object *this);
 f32 catmull_rom_interpolation(f32 *data, s32 index, f32 x);
 f32 cubic_spline_interpolation(f32 *data, s32 index, f32 x, f32 *derivative);

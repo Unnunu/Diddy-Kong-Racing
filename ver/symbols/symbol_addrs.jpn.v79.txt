@@ -393,8 +393,8 @@ run_object_init_func = 0x800238BC;
 obj_init_property_flags = 0x80023E30;
 run_object_loop_func = 0x80023F48;
 func_8002458C = 0x8002458C;
-func_80024594 = 0x80024594;
-func_800245B4 = 0x800245B4;
+obj_get_event_log = 0x80024594;
+obj_log_event = 0x800245B4;
 
 // obj_shade_fast.c .text
 obj_shade_fast = 0x800245F0;
@@ -2202,7 +2202,7 @@ gNumAudioPoints = 0x800DE070;
 // objects.c .data
 gTajChallengeTransition = 0x800DE080;
 gBalloonCutsceneTransition = 0x800DE088;
-D_800DC700 = 0x800DE090;
+gLastLogRecord = 0x800DE090;
 D_800DC704 = 0x800DE094;
 D_800DC708 = 0x800DE098;
 D_800DC70C = 0x800DE09C;
@@ -3575,7 +3575,7 @@ gJinglesOff = 0x8011C688;
 D_8011AC1C = 0x8011C68C;
 
 // objects .bss
-D_8011AC20 = 0x8011C690; // size:0x100
+gObjEventLog = 0x8011C690; // size:0x100
 D_8011AD20 = 0x8011C790;
 D_8011AD21 = 0x8011C791;
 D_8011AD22 = 0x8011C792; // size:0x2
@@ -4479,7 +4479,7 @@ gEPCMesgQueue = 0x8012B240;
 gEPCMesgBuf = 0x8012B258;
 gEPCPIBuf = 0x8012B278;
 gEPCPIQueue = 0x8012B298;
-gEpcInfo = 0x8012B2B0; // size:0x1B0
+gFaultThreadInfo = 0x8012B2B0; // size:0x1B0
 gEpcInfoStack1 = 0x8012B460; // size:0x200
 gEpcInfoStack2 = 0x8012B660; // size:0x400
 gObjectStackTrace = 0x8012BA60; // size:0x10
