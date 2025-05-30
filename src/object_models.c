@@ -647,7 +647,7 @@ s32 func_80060C58(Vertex *vertices, s32 i1, s32 i2, s32 i3, s32 i4) {
 
 #define NEARBY(a, b, x) (b->x - 4 < a->x && a->x < b->x + 4)
 
-    if (i1 == i3 && i2 == i4 || i1 == i4 && i2 == i3) {
+    if ((i1 == i3 && i2 == i4) || (i1 == i4 && i2 == i3)) {
         return 1;
     }
 
@@ -671,7 +671,64 @@ s32 func_80060C58(Vertex *vertices, s32 i1, s32 i2, s32 i3, s32 i4) {
 #undef NEARBY
 }
 
-#pragma GLOBAL_ASM("asm/nonmatchings/object_models/func_80060EA8.s")
+//#pragma GLOBAL_ASM("asm/nonmatchings/object_models/func_80060EA8.s")
+s32 func_80060EA8(ObjectModel* model) {
+    Vertex *s3;
+    Triangle *spB0;
+    Vec3f *spAC; // TODO: type
+    TriangleBatchInfo *spA4;
+    Vec3s *spA0; // TODO type
+    s16 i; // s1
+    s32 j; // s5
+    s32 sp98;
+    s32 s4;
+    s32 k;
+    Vec3f sp70;
+    Vec3f sp64;
+    Vec3f sp58;
+
+    spA4 = model->batches;
+    model->unk40 = NULL;
+
+    sp98 = 0;
+    for (i = 0; i < model->numberOfBatches; i++) {
+        if (spA4[i].unk6 != 0xFF || (spA4[i].flags & RENDER_ENVMAP)) {
+            sp98 += spA4[i + 1].verticesOffset - spA4[i].verticesOffset;
+        }
+    }
+
+    if (sp98 <= 0) {
+        return 0;
+    }
+
+    s3 = model->vertices;
+    spB0 = model->triangles;
+
+    spAC = mempool_alloc(model->numberOfTriangles * sizeof(Vec3f), COLOUR_TAG_ORANGE); // TODO type
+    if (spAC == NULL) {
+        return 1;
+    }
+
+    spA0 = mempool_alloc(sp98 * sizeof(Vec3s), COLOUR_TAG_ORANGE);
+    if (spA0 == NULL) {
+        mempool_free(spAC);
+        return 1;
+    }
+
+    for (i = 0; i < model->numberOfBatches; i++) {
+        s4 = spA4[i].verticesOffset;
+        for (j = spA4[i].facesOffset; spA4[i + 1].facesOffset; j++) {
+            Triangle *a0 = &spB0[j];
+            for (k = 0; k < 3; k++) {
+                s32 a2 = a0->verticesArray[1 + k] + s4;
+                sp70.f[k] = s3[a2].x;
+                sp64.f[k] = s3[a2].y;
+                sp58.f[k] = s3[a2].z;
+            }
+        }
+    }
+
+}
 
 void func_800619F4(s32 arg0) {
     D_8011D640 = arg0;
