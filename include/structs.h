@@ -612,12 +612,13 @@ typedef struct TriangleBatchInfo {
 /* 0x01 */ s8  vertOverride; // If used, will end a draw this many verts in, so it can do something mid mesh.
 /* 0x02 */ s16 verticesOffset;
 /* 0x04 */ s16 facesOffset;
-/* 0x06 */ u8  miscData; // 0xFF = vertex colors, otherwise use dynamic lighting normals (Objects only)
+/* 0x06 */ u8  smoothingGroup; // 0xFF = vertex colors, otherwise use dynamic lighting normals (Objects only)
 /* 0x07 */ u8  texOffset;
 /* 0x08 */ u32 flags; // See RenderFlags in textures_sprites.c
 } TriangleBatchInfo;
 
-#define BATCH_VTX_COL 0xFF
+#define SMOOTHING_GROUP_SOLO 0xFE
+#define SMOOTHING_GROUP_DISABLED 0xFF
 
 /* Size: 8 bytes */
 typedef struct ObjectModel_44 {
@@ -662,7 +663,7 @@ typedef struct ObjectModel {
     /* 0x34 */ u8 pad34[4];
     /* 0x38 */ TriangleBatchInfo* batches;
     /* 0x3C */ f32 unk3C;
-    /* 0x40 */ Vec3s* unk40;
+    /* 0x40 */ Vec3s* normals;
     /* 0x44 */ ObjectModel_44* animations;
     /* 0x48 */ s16 numberOfAnimations;
     /* 0x4A */ s16 unk4A;

@@ -2163,7 +2163,7 @@ s32 init_object_shading(Object *obj, ShadeProperties *shadeData) {
     returnSize = 0;
     if (obj->segment.header->modelType == OBJECT_MODEL_TYPE_3D_MODEL) {
         for (i = 0; obj->unk68[i] == NULL; i++) {}
-        if (obj->unk68[i] != NULL && obj->unk68[i]->objModel->unk40 != NULL) {
+        if (obj->unk68[i] != NULL && obj->unk68[i]->objModel->normals != NULL) {
             set_shading_properties(obj->shading, obj->segment.header->shadeAmbient, obj->segment.header->shadeDiffuse,
                                    0, obj->segment.header->shadeAngleY, obj->segment.header->shadeAngleZ);
             if (obj->segment.header->unk3D != 0) {
@@ -3278,7 +3278,7 @@ void render_3d_model(Object *obj) {
             if (obj68->modelType == MODELTYPE_ANIMATED) {
                 obj_animate(obj);
             }
-            if (obj68->modelType != MODELTYPE_BASIC && objModel->unk40 != NULL) {
+            if (obj68->modelType != MODELTYPE_BASIC && objModel->normals != NULL) {
                 flags = TRUE;
                 if (racerObj != NULL && racerObj->vehicleID < VEHICLE_BOSSES &&
                     racerObj->playerIndex == PLAYER_COMPUTER) {
@@ -6799,7 +6799,7 @@ void obj_shade_fancy(ObjectModel *model, Object *object, s32 arg2, f32 intensity
     environmentMappingEnabled = 0;
 
     for (i = 0; i < model->numberOfBatches; i++) {
-        if (model->batches[i].miscData != BATCH_VTX_COL) {
+        if (model->batches[i].smoothingGroup != SMOOTHING_GROUP_DISABLED) {
             dynamicLightingEnabled = -1; // This is a bit weird, but I guess it works.
         }
         if (model->batches[i].flags & RENDER_ENVMAP) {
@@ -6848,7 +6848,7 @@ void calc_dynamic_lighting_for_object_1(Object *object, ObjectModel *model, s16 
     }
 
     vertices = object->curVertData;
-    normals = model->unk40;
+    normals = model->normals;
     normIdx = 0;
 
     direction.x = -(object->shading->lightDirX << 3);
@@ -6885,7 +6885,7 @@ void calc_dynamic_lighting_for_object_1(Object *object, ObjectModel *model, s16 
     diffuseFactor = object->shading->diffuse * object->shading->unk0 * 255.0f * intensity;
 
     for (i = 0; i < model->numberOfBatches; i++) {
-        if (model->batches[i].miscData != BATCH_VTX_COL) { // 0xFF means use vertex colors
+        if (model->batches[i].smoothingGroup != SMOOTHING_GROUP_DISABLED) { // 0xFF means use vertex colors
             for (j = model->batches[i].verticesOffset; j < model->batches[i + 1].verticesOffset; j++) {
                 // calculate lighting
                 lightIntensity = (normals[normIdx].x * lightDirX + normals[normIdx].y * lightDirY +
@@ -6947,7 +6947,7 @@ void calc_env_mapping_for_object(ObjectModel *model, s16 zRot, s16 xRot, s16 yRo
 
     count = 0;
     triangles = model->triangles;
-    model40Entries = model->unk40;
+    model40Entries = model->normals;
     objTrans.rotation.z_rotation = zRot;
     objTrans.rotation.x_rotation = xRot;
     objTrans.rotation.y_rotation = yRot;
@@ -7024,7 +7024,7 @@ void calc_env_mapping_for_object(ObjectModel *model, s16 zRot, s16 xRot, s16 yRo
                 triangles[j].uv2.u = D_8011AF68[triangles[j].vi2].u;
                 triangles[j].uv2.v = D_8011AF68[triangles[j].vi2].v;
             }
-        } else if (model->batches[i].miscData < BATCH_VTX_COL) {
+        } else if (model->batches[i].smoothingGroup < SMOOTHING_GROUP_DISABLED) {
             count += model->batches[i + 1].verticesOffset - model->batches[i].verticesOffset;
         }
     }

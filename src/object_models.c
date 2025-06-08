@@ -163,7 +163,7 @@ Object_68 *object_model_init(s32 modelID, s32 flags) {
     objMdl->unk10 = 0;
     objMdl->unk32 = 0;
     objMdl->texOffsetUpdateRate = 0;
-    objMdl->unk40 = 0;
+    objMdl->normals = 0;
     objMdl->numberOfAnimations = 0;
     objMdl->animations = NULL;
     sp3F = 0;
@@ -181,7 +181,7 @@ Object_68 *object_model_init(s32 modelID, s32 flags) {
                 goto block_30;
             }
         }
-        if ((func_80060EA8(objMdl) == 0) && (func_80061A00(objMdl, modelID) == 0)) {
+        if ((objmodel_generate_vertex_normals(objMdl) == 0) && (func_80061A00(objMdl, modelID) == 0)) {
             ret = model_init_type(objMdl, flags);
             if (ret != NULL) {
                 gModelCache[ASSETCACHE_ID(cacheIndex)] = modelID;
@@ -225,7 +225,7 @@ Object_68 *model_init_type(ObjectModel *model, s32 flags) {
         result->vertices[1] = (Vertex *) ((u8 *) result + (model->numberOfVertices * sizeof(Vertex)) + 36);
         result->vertices[2] = (Vertex *) ((u8 *) result + temp);
         result->modelType = MODELTYPE_ANIMATED;
-    } else if ((model->unk40 != NULL) && (flags & OBJECT_SPAWN_UNK01)) {
+    } else if ((model->normals != NULL) && (flags & OBJECT_SPAWN_UNK01)) {
         temp = (model->numberOfVertices * sizeof(Vertex)) + 36;
         result = (Object_68 *) mempool_alloc(temp, COLOUR_TAG_BLUE);
         if (result == NULL) {
@@ -356,8 +356,8 @@ void free_model_data(ObjectModel *mdl) {
         mempool_free(mdl->unk10);
     }
     // ???
-    if (mdl->unk40 != NULL) {
-        mempool_free(mdl->unk40);
+    if (mdl->normals != NULL) {
+        mempool_free(mdl->normals);
     }
     // free the animations
     if (mdl->animations != NULL) {
@@ -671,342 +671,256 @@ s32 func_80060C58(Vertex *vertices, s32 i1, s32 i2, s32 i3, s32 i4) {
 #undef NEARBY
 }
 
-#ifdef NON_EQUIVALENT
-s32 func_80060EA8(ObjectModel *arg0) {
-    Triangle *spB0;
-    f32 *spAC;
-    Vec3s *spA0;
-    s16 sp98;
-    TriangleBatchInfo *sp50;
-    f32 *sp58;
-    f32 sp5C;
-    f32 sp60;
-    f32 *sp64;
-    f32 sp68;
-    f32 sp6C;
-    f32 *sp70;
-    f32 sp74;
-    f32 sp78;
-    s16 *temp_v0_2;
-    f32 *temp_v0_3;
-    s16 *temp_v0_5;
-    Vec3f *temp_v0_6;
-    TriangleBatchInfo *temp_a3;
-    TriangleBatchInfo *temp_a3_2;
-    TriangleBatchInfo *temp_ra;
-    TriangleBatchInfo *temp_t0;
-    TriangleBatchInfo *temp_t8_2;
-    TriangleBatchInfo *temp_v0;
-    TriangleBatchInfo *temp_v0_4;
-    TriangleBatchInfo *var_ra;
-    Vertex *temp_s3;
-    Vertex *temp_v1_2;
-    Vertex *temp_v1_3;
-    Vertex *temp_v1_4;
-    Vertex *temp_v1_5;
-    Vertex *temp_v1_6;
-    f32 *temp_t7;
-    f32 *temp_t8;
-    f32 temp_f0;
-    f32 temp_f0_2;
-    f32 temp_f0_3;
-    f32 temp_f0_4;
-    f32 temp_f14;
-    f32 temp_f14_2;
-    f32 temp_f2;
-    f32 temp_f2_2;
-    f32 temp_f2_3;
-    s16 temp_a2;
-    s16 temp_a2_2;
-    s16 temp_s4;
-    s16 temp_t7_2;
-    s16 temp_t8_3;
-    s16 temp_v1;
-    s16 var_a0;
-    s16 var_a0_2;
-    s16 var_a0_3;
-    s16 var_a1;
-    s16 var_a1_2;
-    s16 var_a2;
-    s16 var_a2_2;
-    s16 var_a3;
-    s16 var_a3_2;
-    s16 var_a3_3;
-    s16 var_a3_4;
-    s16 var_a3_5;
-    s16 var_s1_2;
-    s16 batchNum;
-    s16 var_s5;
-    s16 var_s5_2;
-    s16 var_s6;
-    s16 var_t3;
-    s16 var_v1;
-    s16 var_v1_2;
-    s16 var_v1_3;
-    s32 temp_a3_3;
-    s32 temp_lo;
-    s32 temp_s1;
-    s32 temp_s1_2;
-    s16 var_s1;
-    s32 var_s1_4;
-    s32 var_t7;
-    s32 var_t8;
-    s32 var_t8_2;
-    s32 var_t9;
-    s32 var_t9_2;
-    u8 *temp_a0;
-    u8 *var_t6;
-    u8 temp_t4;
-    f32 *temp_s0;
-    f32 *temp_s0_2;
-    f32 *temp_s0_3;
-    f32 *temp_v0_7;
-    f32 *temp_v1_7;
-    f32 *temp_v1_8;
-    s16 *temp_v1_9;
+/**
+ * Generates a vertex normal map for the model by averaging normals of the adjacent triangles at each vertex.
+ * The result is used for dynamic lighting with Gouraud shading and environment mapping.
+ *
+ * Triangle batches are grouped into "smoothing groups." Within each smoothing group, vertices from different batches
+ * that occupy the same position in space are treated as the same vertex when computing averaged normals.
+ *
+ * Different smoothing groups can be used, for example, to prevent normal blending across sharp edges.
+ *
+ * There is also a special case: if a smoothing group consists of only one batch, we can skip the expensive search
+ * for matching vertices across other batches.
+ *
+ * The function returns 0 on success, or 1 if memory allocation fails.
+ */
+s32 objmodel_generate_vertex_normals(ObjectModel *model) {
+    Vertex *vertices;
+    Triangle *triangles;
+    Vec3f *triangleNormals;
+    s16 batchIndex;
+    TriangleBatchInfo *batches;
+    Vec3s *normals;
+    s16 numUniqueVertices;
+    s16 vertIndex;
+    s16 i;
+    s16 j;
+    s16 k;
+    s16 triIndex;
+    s16 curVert;
+    s16 vertOffset;
+    f32 length;
+    Vec3f *uniqueVertNormals;
+    s16 *uniqueVertices;
+    s16 vx, vy, vz;
 
-    temp_v1 = arg0->numberOfBatches;
-    temp_ra = arg0->batches;
-    arg0->unk40 = NULL;
+    batches = model->batches;
+    model->normals = NULL;
 
-    var_a3 = 0;
-    for (var_s1 = 0; var_s1 < temp_v1; var_s1++) {
-        if (temp_ra[var_s1].miscData != BATCH_VTX_COL || (temp_ra[var_s1].flags & RENDER_ENVMAP)) {
-            var_a3 = (var_a3 + (temp_ra[var_s1 + 1]).verticesOffset) - temp_ra[var_s1].verticesOffset;
+    // First, determine how many vertices belong to batches that require dynamic lighting
+    j = 0;
+    for (batchIndex = 0; batchIndex < model->numberOfBatches; batchIndex++) {
+        if (batches[batchIndex].smoothingGroup != SMOOTHING_GROUP_DISABLED ||
+            (batches[batchIndex].flags & RENDER_ENVMAP)) {
+            j += batches[batchIndex + 1].verticesOffset - batches[batchIndex].verticesOffset;
         }
     }
-    if (var_a3 > 0) {
-        temp_s3 = arg0->vertices;
-        spB0 = arg0->triangles;
-        sp98 = var_a3;
-        temp_v0_2 = mempool_alloc(arg0->numberOfTriangles * 0xC, COLOUR_TAG_ORANGE);
-        spAC = temp_v0_2;
-        if (temp_v0_2 == NULL) {
-            return 1;
-        }
-        temp_v0_3 = mempool_alloc(var_a3 * 6, COLOUR_TAG_ORANGE);
-        var_ra = temp_ra;
-        spA0 = temp_v0_3;
-        if (temp_v0_3 == NULL) {
-            mempool_free(spAC);
+
+    // If there are no such vertices, no normal map is needed
+    if (j > 0) {
+        vertices = model->vertices;
+        triangles = model->triangles;
+
+        triangleNormals = (Vec3f *) mempool_alloc(model->numberOfTriangles * sizeof(Vec3f), COLOUR_TAG_ORANGE);
+        if (triangleNormals == NULL) {
             return 1;
         }
 
-        var_v1 = arg0->numberOfBatches;
-        for (var_s1_2 = 0; var_s1_2 < var_v1; var_s1_2++) {
-            temp_v0_4 = &var_ra[var_s1_2];
-            temp_s4 = temp_v0_4->verticesOffset;
-            for (var_s5 = temp_v0_4->facesOffset; var_s5 < (temp_v0_4 + 1)->facesOffset; var_s5 += 1) {
-                for (var_a3_2 = 0; var_a3_2 < 3; var_a3_2++) {
-                    temp_v1_2 = &temp_s3[(s16) (spB0[var_s5].verticesArray[var_a3_2 + 1] + temp_s4)];
-                    temp_t7 = &(&sp64[0])[var_a3_2];
-                    temp_t8 = &(&sp58[0])[var_a3_2];
-                    (&sp70[0])[var_a3_2] = (f32) temp_v1_2->x;
-                    *temp_t7 = (f32) temp_v1_2->y;
-                    *temp_t8 = (f32) temp_v1_2->z;
+        // Allocate memory for per-triangle normals
+        normals = (Vec3s *) mempool_alloc(j * sizeof(Vec3s), COLOUR_TAG_ORANGE);
+        if (normals == NULL) {
+            mempool_free(triangleNormals);
+            return 1;
+        }
+
+        // Compute face normals for all triangles
+        for (batchIndex = 0; batchIndex < model->numberOfBatches; batchIndex++) {
+            vertOffset = batches[batchIndex].verticesOffset;
+            for (triIndex = batches[batchIndex].facesOffset; triIndex < batches[batchIndex + 1].facesOffset;
+                 triIndex++) {
+                f32 vertX[3];
+                f32 vertY[3];
+                f32 vertZ[3];
+                for (j = 0; j < 3; j++) {
+                    k = triangles[triIndex].verticesArray[j + 1] + vertOffset;
+                    vertX[j] = vertices[k].x;
+                    vertY[j] = vertices[k].y;
+                    vertZ[j] = vertices[k].z;
                 }
-                temp_s0 = spAC + (var_s5 * 0xC);
-                temp_s0[0] = (f32) (((sp58[0] - sp60) * (sp64[0] - sp68)) - ((sp58[0] - sp5C) * (sp64[0] - sp6C)));
-                temp_s0[1] = (f32) (((sp58[0] - sp5C) * (sp70[0] - sp78)) - ((sp58[0] - sp60) * (sp70[0] - sp74)));
-                temp_s0[2] = (f32) (((sp70[0] - sp74) * (sp64[0] - sp6C)) - ((sp64[0] - sp68) * (sp70[0] - sp78)));
-                temp_f0_2 = sqrtf((temp_s0[2] * temp_s0[2]) + ((temp_s0[0] * temp_s0[0]) + (temp_s0[1] * temp_s0[1])));
-                if (temp_f0_2 != 0.0f) {
-                    temp_s0[0] = (f32) (temp_s0[0] / temp_f0_2);
-                    temp_s0[1] = (f32) (temp_s0[1] / temp_f0_2);
-                    temp_s0[2] = (f32) (temp_s0[2] / temp_f0_2);
+
+                // Calculate normal using the cross product of triangle edges
+                triangleNormals[triIndex].x =
+                    (vertZ[0] - vertZ[2]) * (vertY[0] - vertY[1]) - (vertY[0] - vertY[2]) * (vertZ[0] - vertZ[1]);
+                triangleNormals[triIndex].y =
+                    (vertZ[0] - vertZ[1]) * (vertX[0] - vertX[2]) - (vertX[0] - vertX[1]) * (vertZ[0] - vertZ[2]);
+                triangleNormals[triIndex].z =
+                    (vertX[0] - vertX[1]) * (vertY[0] - vertY[2]) - (vertX[0] - vertX[2]) * (vertY[0] - vertY[1]);
+                length = sqrtf(triangleNormals[triIndex].x * triangleNormals[triIndex].x +
+                               triangleNormals[triIndex].y * triangleNormals[triIndex].y +
+                               triangleNormals[triIndex].z * triangleNormals[triIndex].z);
+                if (length != 0.0f) {
+                    // Normalize the triangle normal
+                    triangleNormals[triIndex].x /= length;
+                    triangleNormals[triIndex].y /= length;
+                    triangleNormals[triIndex].z /= length;
                 }
             }
         }
-        temp_v0_5 = mempool_alloc(arg0->numberOfVertices * 2, COLOUR_TAG_ORANGE);
-        if (temp_v0_5 == NULL) {
-            mempool_free(spAC);
-            mempool_free(spA0);
+
+        // Allocate memory to map each vertex to a unique representative
+        uniqueVertices = (s16 *) mempool_alloc(model->numberOfVertices * sizeof(s16), COLOUR_TAG_ORANGE);
+        if (uniqueVertices == NULL) {
+            mempool_free(triangleNormals);
+            mempool_free(normals);
             return 1;
         }
-        var_s6 = 0;
-        for (batchNum = 0; batchNum < arg0->numberOfBatches; batchNum++) {
-            temp_t8_2 = &var_ra[batchNum];
-            sp50 = temp_t8_2;
-            var_t3 = temp_t8_2->verticesOffset;
-            if (var_t3 < (temp_t8_2 + 1)->verticesOffset) {
-                do {
-                    if (sp50->miscData < 0xFE) {
-                        var_a2 = -1;
-                        var_a1 = 0;
-                        temp_v1_3 = &temp_s3[var_t3];
-                        if (batchNum >= 0) {
-                        loop_30:
-                            temp_a3 = &var_ra[var_a1];
-                            if ((sp50->miscData == temp_a3->miscData) &&
-                                (((var_a0 = temp_a3->verticesOffset, (var_a1 == batchNum)) && (var_a0 < var_t3)) ||
-                                 ((var_a1 != batchNum) && (var_a0 < (temp_a3 + 1)->verticesOffset))) &&
-                                (var_a2 < 0)) {
-                            loop_36:
-                                temp_v1_4 = &temp_s3[var_a0];
-                                if ((temp_v1_3->x == temp_v1_4->x) && (temp_v1_3->y == temp_v1_4->y) &&
-                                    (temp_v1_3->z == temp_v1_4->z)) {
-                                    var_a2 = *(temp_v0_5 + (var_a0 * 2));
+
+        numUniqueVertices = 0;
+        // Merge vertices across different batches that share the same smoothing group
+        for (batchIndex = 0; batchIndex < model->numberOfBatches; batchIndex++) {
+            for (vertIndex = batches[batchIndex].verticesOffset; vertIndex < batches[batchIndex + 1].verticesOffset;
+                 vertIndex++) {
+                if (batches[batchIndex].smoothingGroup < SMOOTHING_GROUP_SOLO) {
+                    k = -1;
+                    vx = vertices[vertIndex].x;
+                    vy = vertices[vertIndex].y;
+                    vz = vertices[vertIndex].z;
+
+                    // Loop through previous batches and vertices
+                    // If a vertex with the same coordinates is found in the same smoothing group,
+                    // treat it as the same unique vertex
+                    for (i = 0; i <= batchIndex && k < 0; i++) {
+                        if (batches[batchIndex].smoothingGroup == batches[i].smoothingGroup) {
+                            curVert = batches[i].verticesOffset;
+                            while ((i == batchIndex && curVert < vertIndex ||
+                                    i != batchIndex && curVert < batches[i + 1].verticesOffset) &&
+                                   k < 0) {
+                                if (vx == vertices[curVert].x && vy == vertices[curVert].y &&
+                                    vz == vertices[curVert].z) {
+                                    k = uniqueVertices[curVert];
                                 }
-                                temp_t8_3 = var_a0 + 1;
-                                var_a0 = temp_t8_3;
-                                if ((((var_a1 == batchNum) && (temp_t8_3 < var_t3)) ||
-                                     ((var_a1 != batchNum) && (var_a0 < (temp_a3 + 1)->verticesOffset))) &&
-                                    (var_a2 < 0)) {
-                                    goto loop_36;
-                                }
-                            }
-                            var_a1 += 1;
-                            if ((batchNum >= var_a1) && (var_a2 < 0)) {
-                                goto loop_30;
+                                curVert++;
                             }
                         }
-                        if (var_a2 < 0) {
-                            *(temp_v0_5 + (var_t3 * 2)) = var_s6;
-                            var_s6 += 1;
-                        } else {
-                            *(temp_v0_5 + (var_t3 * 2)) = var_a2;
-                        }
-                    } else if (sp50->miscData == 0xFE) {
-                        *(temp_v0_5 + (var_t3 * 2)) = var_s6;
-                        var_s6 += 1;
-                    } else if (sp50->flags & RENDER_ENVMAP) {
-                        var_a2_2 = -1;
-                        var_a1_2 = 0;
-                        temp_v1_5 = &temp_s3[var_t3];
-                        if (batchNum >= 0) {
-                        loop_54:
-                            temp_a3_2 = &var_ra[var_a1_2];
-                            if ((temp_a3_2->flags & RENDER_ENVMAP) &&
-                                (((var_a0_2 = temp_a3_2->verticesOffset, (var_a1_2 == batchNum)) &&
-                                  (var_a0_2 < var_t3)) ||
-                                 ((var_a1_2 != batchNum) && (var_a0_2 < (temp_a3_2 + 1)->facesOffset))) &&
-                                (var_a2_2 < 0)) {
-                            loop_60:
-                                temp_v1_6 = &temp_s3[var_a0_2];
-                                if ((temp_v1_5->x == temp_v1_6->x) && (temp_v1_5->y == temp_v1_6->y) &&
-                                    (temp_v1_5->z == temp_v1_6->z)) {
-                                    var_a2_2 = *(temp_v0_5 + (var_a0_2 * 2));
-                                }
-                                var_a0_2++;
-                                if ((((var_a1_2 == batchNum) && (var_a0_2 < var_t3)) ||
-                                     ((var_a1_2 != batchNum) && (var_a0_2 < (temp_a3_2 + 1)->facesOffset))) &&
-                                    (var_a2_2 < 0)) {
-                                    goto loop_60;
-                                }
-                            }
-                            var_a1_2 += 1;
-                            if ((batchNum >= var_a1_2) && (var_a2_2 < 0)) {
-                                goto loop_54;
-                            }
-                        }
-                        if (var_a2_2 < 0) {
-                            *(temp_v0_5 + (var_t3 * 2)) = var_s6;
-                            var_s6 += 1;
-                        } else {
-                            *(temp_v0_5 + (var_t3 * 2)) = var_a2_2;
-                        }
-                    } else {
-                        *(temp_v0_5 + (var_t3 * 2)) = -1;
                     }
-                    var_t3 += 1;
-                } while (var_t3 < (sp50 + 1)->verticesOffset);
-            }
-        }
-        temp_v0_6 = mempool_alloc(var_s6 * 0xC, COLOUR_TAG_ORANGE);
-        if (temp_v0_6 == NULL) {
-            mempool_free(spAC);
-            mempool_free(spA0);
-            mempool_free(temp_v0_5);
-            return 1;
-        }
-        var_a3_3 = 0;
-        var_s1_4 = 0;
-        while (var_a3_3 < var_s6) {
-            temp_lo = var_a3_3 * 0xC;
-            var_a3_3 += 1;
-            temp_v1_7 = temp_v0_6 + temp_lo;
-            temp_v1_7[0] = 0.0f;
-            temp_v1_7[1] = 0.0f;
-            temp_v1_7[2] = 0.0f;
-        }
-        var_v1_3 = arg0->numberOfBatches;
-        while (var_s1_4 < var_v1_3) {
-            temp_s1_2 = var_s1_4 + 1;
-            temp_t0 = &var_ra[var_s1_4];
-            if ((temp_t0->miscData != BATCH_VTX_COL) ||
-                (var_t8_2 = temp_s1_2 << 0x10, ((temp_t0->flags & RENDER_ENVMAP) != 0))) {
-                var_s5_2 = temp_t0->facesOffset;
-                var_t8_2 = temp_s1_2 << 0x10;
-                if (var_s5_2 < (temp_t0 + 1)->facesOffset) {
-                    var_t7 = var_s5_2 * 0x10;
-                    do {
-                        temp_a0 = &spB0->verticesArray[var_t7];
-                        var_a3_4 = 0;
-                        var_t6 = temp_a0;
-                    loop_89:
-                        temp_a2 = *(temp_v0_5 + ((s16) (var_t6[1] + temp_t0->verticesOffset) * 2));
-                        var_a3_4 += 1;
-                        if (temp_a2 >= 0) {
-                            temp_v1_8 = temp_v0_6 + (temp_a2 * 0xC);
-                            temp_s0_2 = spAC + (var_s5_2 * 0xC);
-                            temp_v1_8[0] += temp_s0_2[0];
-                            temp_v1_8[1] += temp_s0_2[1];
-                            temp_v1_8[2] += temp_s0_2[2];
+                    if (k < 0) {
+                        // If no match found, assign a new unique vertex ID
+                        uniqueVertices[vertIndex] = numUniqueVertices++;
+                    } else {
+                        uniqueVertices[vertIndex] = k;
+                    }
+                } else if (batches[batchIndex].smoothingGroup == SMOOTHING_GROUP_SOLO) {
+                    // If smoothing group is SMOOTHING_GROUP_SOLO, all vertices are treated as unique
+                    uniqueVertices[vertIndex] = numUniqueVertices++;
+                } else if (batches[batchIndex].flags & RENDER_ENVMAP) {
+                    k = -1;
+                    vx = vertices[vertIndex].x;
+                    vy = vertices[vertIndex].y;
+                    vz = vertices[vertIndex].z;
+
+                    // If environment mapping is enabled, allow merging with other envmapped vertices,
+                    // even if smoothing groups differ
+                    for (i = 0; i <= batchIndex && k < 0; i++) {
+                        if (batches[i].flags & RENDER_ENVMAP) {
+                            curVert = batches[i].verticesOffset;
+                            while ((i == batchIndex && curVert < vertIndex ||
+                                    i != batchIndex && curVert < batches[i + 1].verticesOffset) &&
+                                   k < 0) {
+                                // Match vertices by coordinates only, across all previous envmapped batches
+                                if (vx == vertices[curVert].x && vy == vertices[curVert].y &&
+                                    vz == vertices[curVert].z) {
+                                    k = uniqueVertices[curVert];
+                                }
+                                curVert++;
+                            }
                         }
-                        var_t6 = &temp_a0[var_a3_4];
-                        if (var_a3_4 < 3) {
-                            goto loop_89;
-                        }
-                        var_s5_2 += 1;
-                        var_t7 = var_s5_2 * 0x10;
-                    } while (var_s5_2 < (temp_t0 + 1)->verticesOffset);
-                    var_v1_3 = arg0->numberOfBatches;
-                    var_t8_2 = temp_s1_2 << 0x10;
+                    }
+
+                    if (k < 0) {
+                        uniqueVertices[vertIndex] = numUniqueVertices++;
+                    } else {
+                        uniqueVertices[vertIndex] = k;
+                    }
+                } else {
+                    // If the smoothing group is SMOOTHING_GROUP_DISABLED and the batch is not envmapped,
+                    // this vertex does not contribute to lighting and is marked as unused (-1)
+                    uniqueVertices[vertIndex] = -1;
                 }
             }
-            var_s1_4 = var_t8_2 >> 0x10;
         }
-        for (var_a3_5 = 0; var_a3_5 < var_s6; var_a3_5++) {
-            temp_s0_3 = temp_v0_6 + (var_a3_5 * 0xC);
-            temp_f2_2 = temp_s0_3[0];
-            temp_f14_2 = temp_s0_3[1];
-            temp_f0_3 = temp_s0_3[2];
-            sp98 = var_a3_5;
-            temp_f0_4 = sqrtf((temp_f0_3 * temp_f0_3) + ((temp_f2_2 * temp_f2_2) + (temp_f14_2 * temp_f14_2)));
-            if (temp_f0_4 != 0.0f) {
-                temp_f0_4 *= 0.00012207031f;
-                temp_s0_3[0] /= temp_f0_4;
-                temp_s0_3[1] /= temp_f0_4;
-                temp_s0_3[2] /= temp_f0_4;
+
+        // Allocate memory for averaged normals per unique vertex
+        uniqueVertNormals = (Vec3f *) mempool_alloc(numUniqueVertices * sizeof(Vec3f), COLOUR_TAG_ORANGE);
+        if (uniqueVertNormals == NULL) {
+            mempool_free(triangleNormals);
+            mempool_free(normals);
+            mempool_free(uniqueVertices);
+            return 1;
+        }
+
+        // Initialize normals to zero
+        for (j = 0; j < numUniqueVertices; j++) {
+            uniqueVertNormals[j].x = 0.0f;
+            uniqueVertNormals[j].y = 0.0f;
+            uniqueVertNormals[j].z = 0.0f;
+        }
+
+        // For each triangle, accumulate its normal into the normals of the involved unique vertices
+        // (only for batches that participate in lighting or environment mapping)
+        for (batchIndex = 0; batchIndex < model->numberOfBatches; batchIndex++) {
+            if (batches[batchIndex].smoothingGroup != SMOOTHING_GROUP_DISABLED ||
+                (batches[batchIndex].flags & RENDER_ENVMAP)) {
+                vertOffset = batches[batchIndex].verticesOffset;
+                for (triIndex = batches[batchIndex].facesOffset; triIndex < batches[batchIndex + 1].facesOffset;
+                     triIndex++) {
+                    for (j = 0; j < 3; j++) {
+                        k = triangles[triIndex].verticesArray[j + 1] + vertOffset;
+                        k = uniqueVertices[k];
+
+                        if (k >= 0) {
+                            uniqueVertNormals[k].x += triangleNormals[triIndex].x;
+                            uniqueVertNormals[k].y += triangleNormals[triIndex].y;
+                            uniqueVertNormals[k].z += triangleNormals[triIndex].z;
+                        }
+                    }
+                }
             }
         }
-        var_a3_5 = 0;
-        var_a0_3 = 0;
-        var_t9 = 0 * 2;
-        while (var_a3_5 < arg0->numberOfVertices) {
-            temp_a2_2 = temp_v0_5[var_t9];
-            temp_a3_3 = var_a3_5 + 1;
-            var_t9_2 = temp_a3_3 << 0x10;
-            if (temp_a2_2 >= 0) {
-                spA0[var_a0_3].x = temp_v0_6[temp_a2_2].x;
-                spA0[var_a0_3].y = temp_v0_6[temp_a2_2].y;
-                spA0[var_a0_3].z = temp_v0_6[temp_a2_2].z;
-                var_t9_2 = temp_a3_3 << 0x10;
-                var_a0_3++;
+
+        // Normalize all accumulated normals and scale them by 0x2000
+        // to convert to fixed-point 3.13 format
+        for (j = 0; j < numUniqueVertices; j++) {
+            length = sqrtf(uniqueVertNormals[j].x * uniqueVertNormals[j].x +
+                           uniqueVertNormals[j].y * uniqueVertNormals[j].y +
+                           uniqueVertNormals[j].z * uniqueVertNormals[j].z);
+            if (length != 0.0f) {
+                uniqueVertNormals[j].x /= length * (1.0f / 0x2000);
+                uniqueVertNormals[j].y /= length * (1.0f / 0x2000);
+                uniqueVertNormals[j].z /= length * (1.0f / 0x2000);
             }
-            var_a3_5 = (s16) (var_t9_2 >> 0x10);
-            var_t9 = var_a3_5 * 2;
         }
-        arg0->unk40 = (Vec3s *) spA0;
-        mempool_free(temp_v0_5);
-        mempool_free(temp_v0_6);
-        mempool_free(spAC);
+
+        // Fill the final array of vertex normals using the unique vertex indices
+        curVert = 0;
+        for (j = 0; j < model->numberOfVertices; j++) {
+            k = uniqueVertices[j];
+            if (k >= 0) {
+                normals[curVert].x = uniqueVertNormals[k].x;
+                normals[curVert].y = uniqueVertNormals[k].y;
+                normals[curVert].z = uniqueVertNormals[k].z;
+                curVert++;
+            }
+        }
+
+        // Save the generated normals into the model and free temporary memory
+        model->normals = normals;
+        mempool_free(uniqueVertices);
+        mempool_free(uniqueVertNormals);
+        mempool_free(triangleNormals);
     }
     return 0;
 }
-#else
-#pragma GLOBAL_ASM("asm/nonmatchings/object_models/func_80060EA8.s")
-#endif
 
 void func_800619F4(s32 arg0) {
     D_8011D640 = arg0;

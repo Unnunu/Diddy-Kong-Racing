@@ -1299,9 +1299,9 @@ void animate_level_textures(s32 updateRate) {
                     if (texture->numOfTextures != 0x100 && texture->frameAdvanceDelay) {
                         temp = batch[batchNumber].texOffset << 6;
                         if (batch[batchNumber].flags & RENDER_UNK_80000000) {
-                            temp |= batch[batchNumber].miscData;
+                            temp |= batch[batchNumber].smoothingGroup;
                             tex_animate_texture(texture, &batch[batchNumber].flags, &temp, updateRate);
-                            batch[batchNumber].miscData = temp & 0x3F;
+                            batch[batchNumber].smoothingGroup = temp & 0x3F;
                         } else {
                             tex_animate_texture(texture, &batch[batchNumber].flags, &temp, updateRate);
                         }

@@ -5,11 +5,11 @@ This repo contains a work-in-progress decompilation of Diddy Kong Racing for the
 All versions are supported, and the US 1.0 version (SHA1 = 0cb115d8716dbbc2922fda38e533b9fe63bb9670) of the game is the default if not specified.
 
 <!-- README_SCORE_SUMMARY_BEGIN -->
-As of June 5, 2025, this is our current score:
+As of June 8, 2025, this is our current score:
 
-&emsp;&emsp;&emsp;&emsp;Decomp progress: 89.17%
+&emsp;&emsp;&emsp;&emsp;Decomp progress: 89.50%
 
-&emsp;&emsp;&emsp;&emsp;Documentation progress: 59.17%
+&emsp;&emsp;&emsp;&emsp;Documentation progress: 59.53%
 <!-- README_SCORE_SUMMARY_END -->
 
 ---
@@ -117,30 +117,30 @@ s32 is_drumstick_unlocked(void) {
 ```
 
 <!-- README_SCORE_BEGIN -->
-As of June 5, 2025, this is our current score:
+As of June 8, 2025, this is our current score:
 ```
  ====================================================================
                 ADVENTURE ONE (ASM -> C Decompilation)
- -------------- 89.17% Complete (90.50% NON_MATCHING) ---------------
-                     # Decompiled functions: 1907
-                      # GLOBAL_ASM remaining: 44
+ -------------- 89.50% Complete (90.83% NON_MATCHING) ---------------
+                     # Decompiled functions: 1908
+                      # GLOBAL_ASM remaining: 43
                      # NON_MATCHING functions: 6
-                  # NON_EQUIVALENT WIP functions: 23
+                  # NON_EQUIVALENT WIP functions: 22
  --------------------------- Game Status ----------------------------
-              Balloons: 41/47, Keys: 4/4, Trophies: 4/5
+              Balloons: 42/47, Keys: 4/4, Trophies: 4/5
                 T.T. Amulets: 4/4, Wizpig Amulets: 4/4
  --------------------------------------------------------------------
-             We are racing in Spaceport Alpha. (Lap 3/3)
+                We are racing in Star City. (Lap 1/3)
  ====================================================================
                 ADVENTURE TWO (Cleanup & Documentation)
- ------------------------- 59.17% Complete --------------------------
-                     # Documented functions: 1206
-                    # Undocumented remaining: 448
+ ------------------------- 59.53% Complete --------------------------
+                     # Documented functions: 1207
+                    # Undocumented remaining: 447
  --------------------------- Game Status ----------------------------
               Balloons: 29/47, Keys: 3/4, Trophies: 2/5
                 T.T. Amulets: 3/4, Wizpig Amulets: 2/4
  --------------------------------------------------------------------
- We are collecting silver coins in Treasure Caves. (0/8 silver coins)
+ We are collecting silver coins in Treasure Caves. (2/8 silver coins)
  ====================================================================
 ```
 <!-- README_SCORE_END -->
